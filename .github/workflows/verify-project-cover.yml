@@ -1,0 +1,79 @@
+name: Verify conceptual project cover
+
+on:
+  push:
+    branches:
+      - main
+      - "design/**"
+    paths:
+      - README.md
+      - assets/project-cover.svg
+      - .github/workflows/verify-project-cover.yml
+  pull_request:
+    paths:
+      - README.md
+      - assets/project-cover.svg
+      - .github/workflows/verify-project-cover.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-cover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check SVG validity, dimensions, semantics and README reference
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          cover = Path("assets/project-cover.svg")
+          readme = Path("README.md")
+          source = cover.read_text(encoding="utf-8")
+          assert 0 < cover.stat().st_size < 200_000, "Cover size outside expected range"
+          upper = source.upper()
+          assert "<!DOCTYPE" not in upper and "<!ENTITY" not in upper, "External entity declarations are forbidden"
+          root = ET.fromstring(source)
+          svg_ns = "{http://www.w3.org/2000/svg}"
+          assert root.tag == svg_ns + "svg", "Not an SVG document"
+          assert root.attrib.get("viewBox") == "0 0 1280 500", "Incorrect cover viewBox"
+          assert root.attrib.get("width") == "1280" and root.attrib.get("height") == "500", "Incorrect cover dimensions"
+          assert root.attrib.get("role") == "img", "Accessible image role missing"
+          assert "conceptual" in root.attrib.get("aria-label", "").lower(), "Conceptual-art label missing"
+          assert "not a product screenshot" in root.attrib.get("aria-label", "").lower(), "Screenshot disclaimer missing"
+          title = root.find(svg_ns + "title")
+          description = root.find(svg_ns + "desc")
+          assert title is not None and "Persian Word Agent" in (title.text or ""), "SVG title missing"
+          assert description is not None and "concept" in (description.text or "").lower(), "SVG description missing"
+          for element in root.iter():
+              local_tag = element.tag.rsplit("}", 1)[-1]
+              assert local_tag not in {"script", "foreignObject", "image"}, "Embedded scripts, HTML or images not allowed"
+              for key, value in element.attrib.items():
+                  if key.rsplit("}", 1)[-1] == "href":
+                      assert not value.startswith(("http:", "https:", "//", "data:")), "External SVG resource forbidden"
+
+          class Images(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.matches = []
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower() == "img":
+                      values = dict(attrs)
+                      if values.get("src") == "assets/project-cover.svg":
+                          self.matches.append(values)
+
+          parser = Images()
+          parser.feed(readme.read_text(encoding="utf-8"))
+          assert len(parser.matches) == 1, "README must reference the local cover exactly once"
+          alt = parser.matches[0].get("alt", "").lower()
+          assert "conceptual" in alt and "not a product screenshot" in alt, "README conceptual-art alt text missing"
+          print("PASS: well-formed 1280x500 conceptual SVG and accessible, truthful README image reference")
+          PY
