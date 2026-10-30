@@ -1,7 +1,7 @@
 # PersianWordAgent
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/TandemVector-Labs/.github/main/brand/social/PersianWordAgent.png" alt="Persian Word Agent visual project card" width="720">
+  <img src="assets/project-cover.svg" alt="Persian Word Agent — conceptual vector project artwork, not a product screenshot" width="960">
 </p>
 
 **PersianWordAgent** is a Windows desktop assistant for controlled formatting, auditing, and repair of Persian Microsoft Word documents.
